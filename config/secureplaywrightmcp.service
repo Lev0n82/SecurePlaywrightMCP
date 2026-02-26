@@ -1,0 +1,88 @@
+[Unit]
+Description=SecurePlaywrightMCP - Hardened Playwright MCP with Podman Rootless
+Documentation=https://github.com/Lev0n82/SecurePlaywrightMCP
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+NotifyAccess=all
+
+# Run as unprivileged user
+User=%u
+Group=%u
+
+# Environment
+Environment=PODMAN_SYSTEMD_UNIT=%n
+Environment=NODE_ENV=production
+Environment=LOG_LEVEL=info
+
+# Security hardening
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources @obsolete
+SystemCallErrorNumber=EPERM
+
+# Resource limits
+MemoryLimit=2G
+CPUQuota=200%
+TasksMax=100
+
+# Podman container execution
+ExecStartPre=/usr/bin/podman pull secureplaywrightmcp:latest
+ExecStart=/usr/bin/podman run \
+    --rm \
+    --name secureplaywrightmcp \
+    --userns=auto \
+    --security-opt label=type:container_runtime_t \
+    --security-opt label=level:s0:c100,c200 \
+    --security-opt seccomp=/etc/containers/secureplaywrightmcp-seccomp.json \
+    --cap-drop=ALL \
+    --read-only \
+    --tmpfs /tmp:rw,noexec,nosuid,size=100m \
+    --memory=2g \
+    --cpus=2 \
+    --pids-limit=100 \
+    --network=secureplaywrightmcp-net \
+    -v /data/playwright:/data:Z \
+    --security-opt no-new-privileges \
+    --health-cmd="node /app/healthcheck.js" \
+    --health-interval=30s \
+    --health-timeout=10s \
+    --health-retries=3 \
+    --health-start-period=60s \
+    --log-driver=journald \
+    --log-opt tag=secureplaywrightmcp \
+    --annotation security.compliance.nist=PR.AC-4,PR.AC-1,PR.AC-5 \
+    --annotation security.compliance.iso27001=A.9.2.3,A.9.1.1,A.13.1.3 \
+    --annotation security.compliance.soc2=CC6.3,CC6.1,CC6.6 \
+    --annotation security.compliance.pcidss=7.1.2,7.1,2.2.1 \
+    secureplaywrightmcp:latest
+
+ExecStop=/usr/bin/podman stop -t 10 secureplaywrightmcp
+ExecStopPost=/usr/bin/podman rm -f secureplaywrightmcp
+
+# Restart policy
+Restart=on-failure
+RestartSec=30s
+StartLimitInterval=300s
+StartLimitBurst=5
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=secureplaywrightmcp
+
+[Install]
+WantedBy=default.target

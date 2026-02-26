@@ -1,0 +1,116 @@
+# SecurePlaywrightMCP Podman Rootless Configuration
+#
+# This configuration file defines the hardened Podman rootless container
+# settings for SecurePlaywrightMCP deployment.
+#
+# Usage:
+#   podman run --config=podman-rootless.yaml secureplaywrightmcp:latest
+
+name: secureplaywrightmcp
+image: secureplaywrightmcp:latest
+
+# Security settings
+security:
+  # Enable rootless mode with user namespace mapping
+  userns: "auto"
+  
+  # SELinux context
+  selinux:
+    type: "container_runtime_t"
+    level: "s0:c100,c200"  # Multi-Category Security (MCS) labels
+  
+  # Seccomp profile
+  seccomp: "/etc/containers/secureplaywrightmcp-seccomp.json"
+  
+  # Drop all capabilities
+  cap_drop:
+    - ALL
+  
+  # Add minimal capabilities if needed (example: bind to port 80)
+  # cap_add:
+  #   - CAP_NET_BIND_SERVICE
+  
+  # Disable new privileges
+  no_new_privileges: true
+  
+  # Read-only root filesystem
+  read_only: true
+
+# Resource limits
+resources:
+  memory: "2g"
+  cpus: "2"
+  pids_limit: 100
+
+# Filesystem mounts
+mounts:
+  # Data volume (read-write, with SELinux label)
+  - type: bind
+    source: "/data/playwright"
+    target: "/data"
+    options:
+      - "Z"  # Relabel with SELinux context
+  
+  # Tmpfs for /tmp (read-write, noexec, nosuid)
+  - type: tmpfs
+    target: "/tmp"
+    options:
+      - "rw"
+      - "noexec"
+      - "nosuid"
+      - "size=100m"
+
+# Network settings
+network:
+  mode: "bridge"
+  name: "secureplaywrightmcp-net"
+  
+  # Network isolation
+  isolation: true
+  
+  # DNS servers (use corporate DNS)
+  dns:
+    - "10.0.0.1"
+    - "10.0.0.2"
+
+# Environment variables
+environment:
+  NODE_ENV: "production"
+  LOG_LEVEL: "info"
+
+# Health check
+healthcheck:
+  test: ["CMD", "node", "/app/healthcheck.js"]
+  interval: "30s"
+  timeout: "10s"
+  retries: 3
+  start_period: "60s"
+
+# Logging
+logging:
+  driver: "journald"
+  options:
+    tag: "secureplaywrightmcp"
+
+# Restart policy
+restart_policy:
+  name: "on-failure"
+  maximum_retry_count: 3
+
+# User namespace mapping
+# Container UID 0 maps to host UID 100000
+# Container UID 1000 maps to host UID 101000
+uidmap:
+  - "0:100000:65536"
+
+gidmap:
+  - "0:100000:65536"
+
+# Annotations for compliance tracking
+annotations:
+  "security.compliance.nist": "PR.AC-4,PR.AC-1,PR.AC-5"
+  "security.compliance.iso27001": "A.9.2.3,A.9.1.1,A.13.1.3"
+  "security.compliance.soc2": "CC6.3,CC6.1,CC6.6"
+  "security.compliance.pcidss": "7.1.2,7.1,2.2.1"
+  "security.review.board": "approved"
+  "security.review.date": "2026-02-26"

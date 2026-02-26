@@ -1,0 +1,82 @@
+policy_module(secureplaywrightmcp, 1.0.0)
+
+########################################
+# SecurePlaywrightMCP SELinux Policy Module
+#
+# This policy module defines a custom SELinux type for SecurePlaywrightMCP containers
+# to enforce mandatory access control beyond standard container_t.
+#
+# Installation:
+#   checkmodule -M -m -o secureplaywrightmcp.mod secureplaywrightmcp.te
+#   semodule_package -o secureplaywrightmcp.pp -m secureplaywrightmcp.mod
+#   semodule -i secureplaywrightmcp.pp
+########################################
+
+require {
+    type container_runtime_t;
+    type container_file_t;
+    type container_var_lib_t;
+    type container_log_t;
+    type spc_t;
+    type svirt_sandbox_file_t;
+    type tmpfs_t;
+    type user_tmp_t;
+    class file { read write open getattr setattr create unlink };
+    class dir { read write open getattr setattr create add_name remove_name };
+    class sock_file { read write create unlink };
+    class unix_stream_socket { connectto };
+    class process { transition signal signull };
+}
+
+########################################
+# Declarations
+########################################
+
+# Define custom type for SecurePlaywrightMCP containers
+type secureplaywrightmcp_t;
+domain_type(secureplaywrightmcp_t)
+
+# Define custom file type for SecurePlaywrightMCP data
+type secureplaywrightmcp_data_t;
+files_type(secureplaywrightmcp_data_t)
+
+# Define custom file type for SecurePlaywrightMCP logs
+type secureplaywrightmcp_log_t;
+logging_log_file(secureplaywrightmcp_log_t)
+
+########################################
+# SecurePlaywrightMCP domain policy
+########################################
+
+# Allow transition from container_runtime_t to secureplaywrightmcp_t
+allow container_runtime_t secureplaywrightmcp_t:process transition;
+
+# Allow secureplaywrightmcp_t to read/write its own data files
+allow secureplaywrightmcp_t secureplaywrightmcp_data_t:file { read write open getattr create unlink };
+allow secureplaywrightmcp_t secureplaywrightmcp_data_t:dir { read write open getattr create add_name remove_name };
+
+# Allow secureplaywrightmcp_t to write logs
+allow secureplaywrightmcp_t secureplaywrightmcp_log_t:file { write open create append getattr };
+allow secureplaywrightmcp_t secureplaywrightmcp_log_t:dir { write add_name };
+
+# Allow secureplaywrightmcp_t to use tmpfs (required for /tmp in read-only containers)
+allow secureplaywrightmcp_t tmpfs_t:file { read write open getattr create unlink };
+allow secureplaywrightmcp_t tmpfs_t:dir { read write open getattr create add_name remove_name };
+
+# Allow secureplaywrightmcp_t to communicate with container runtime
+allow secureplaywrightmcp_t container_runtime_t:unix_stream_socket connectto;
+
+# Deny dangerous operations (explicit denials for audit trail)
+neverallow secureplaywrightmcp_t self:capability { sys_admin sys_module sys_rawio sys_boot };
+neverallow secureplaywrightmcp_t kernel_t:system { module_load module_request };
+neverallow secureplaywrightmcp_t device_t:chr_file { read write };
+
+########################################
+# File contexts
+########################################
+
+# /data/playwright(/.*)?
+/data/playwright(/.*)?    gen_context(system_u:object_r:secureplaywrightmcp_data_t,s0)
+
+# /var/log/secureplaywrightmcp(/.*)?
+/var/log/secureplaywrightmcp(/.*)?    gen_context(system_u:object_r:secureplaywrightmcp_log_t,s0)

@@ -1,0 +1,58 @@
+{
+  "name": "secureplaywrightmcp",
+  "version": "1.0.0",
+  "description": "Hardened Playwright MCP implementation with Podman rootless containers and enterprise security controls",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc && chmod +x dist/index.js",
+    "build:container": "podman build -t secureplaywrightmcp:latest -f Containerfile .",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:security": "npm run test && npm audit && npm run scan:dependencies",
+    "test:compliance": "node scripts/compliance-validator.js",
+    "test:pentest": "node scripts/pentest-runner.js",
+    "audit": "npm audit && snyk test",
+    "scan:dependencies": "snyk test --severity-threshold=high",
+    "scan:binaries": "node scripts/binary-scanner.js",
+    "scan:tarball": "node scripts/tarball-comparator.js",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "prepare": "husky install"
+  },
+  "keywords": [
+    "playwright",
+    "mcp",
+    "security",
+    "podman",
+    "rootless",
+    "enterprise",
+    "automation",
+    "browser",
+    "testing"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "playwright": "^1.49.0",
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@typescript-eslint/eslint-plugin": "^8.21.0",
+    "@typescript-eslint/parser": "^8.21.0",
+    "eslint": "^9.19.0",
+    "husky": "^9.1.7",
+    "prettier": "^3.4.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}
