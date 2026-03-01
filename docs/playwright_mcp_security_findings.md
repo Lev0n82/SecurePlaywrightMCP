@@ -3,7 +3,8 @@
 **Audit Date:** March 1, 2026  
 **Auditor:** AUTONOMOUS.ML Security Team  
 **Scope:** `@playwright/mcp@0.0.68` and all transitive dependencies  
-**Methodology:** Source code review, dependency vulnerability scanning (npm audit, retire.js v5.4.2, OSV database), MCP protocol analysis, and attack surface mapping  
+**Methodology:** Source code review, dependency vulnerability scanning (npm audit, Snyk CLI v1.1303.0 authenticated, retire.js v5.4.2, OSV database), MCP protocol analysis, and attack surface mapping  
+**Snyk Project:** https://app.snyk.io/org/lev0n82/project/db916f09-1d3f-4970-8c20-a0d286b82568  
 **Repository:** https://github.com/microsoft/playwright-mcp  
 **Playwright Core:** https://github.com/microsoft/playwright (monorepo, MCP at `packages/playwright/src/mcp/`)
 
@@ -11,7 +12,7 @@
 
 ## Executive Summary
 
-This audit assessed the security posture of `@playwright/mcp` for enterprise deployment in the AUTONOMOUS.ML CPU Agents for SDLC Phase 4.1 architecture. The package is **legitimate, open-source software with a clean binary profile and no malicious code**. However, the audit identified **3 confirmed CVEs** in its dependency tree, **6 critical architectural security concerns** in the MCP protocol implementation, and **1 undocumented process termination endpoint** that constitutes a significant operational security risk.
+This audit assessed the security posture of `@playwright/mcp` for enterprise deployment in the AUTONOMOUS.ML CPU Agents for SDLC Phase 4.1 architecture. The package is **legitimate, open-source software with a clean binary profile and no malicious code**. However, the audit identified **3 confirmed CVEs** in its dependency tree (independently verified by both npm audit and authenticated Snyk CLI scan), **6 critical architectural security concerns** in the MCP protocol implementation, and **1 undocumented process termination endpoint** that constitutes a significant operational security risk.
 
 The overall risk rating is **HIGH** for unauthenticated network deployments and **MEDIUM** for localhost-only deployments with proper network segmentation.
 
@@ -67,16 +68,23 @@ packages/playwright/src/mcp/
 
 ### 2.1 Scan Methodology
 
-Three scanning approaches were executed:
+Four scanning approaches were executed:
 
-| Tool | Method | Result |
-|---|---|---|
-| `npm audit` | GitHub Advisory Database (GHSA) | 3 vulnerabilities found |
-| `retire.js v5.4.2` | RetireJS vulnerability database | 0 additional findings |
-| OSV Database API | Open Source Vulnerabilities database | Confirmed all 3 npm audit findings |
-| NVD API (NIST) | National Vulnerability Database | Confirmed 3 findings |
+| Tool | Method | Auth | Result |
+|---|---|---|---|
+| `npm audit` | GitHub Advisory Database (GHSA) | None required | 3 vulnerabilities found |
+| **Snyk CLI v1.1303.0** | Snyk vulnerability database | ✅ Authenticated (org: lev0n82) | **3 vulnerabilities confirmed** |
+| `retire.js v5.4.2` | RetireJS vulnerability database | None required | 0 additional findings |
+| OSV Database API | Open Source Vulnerabilities database | None required | Confirmed all 3 findings |
 
-**Note on Snyk:** Snyk CLI v1.1303.0 was installed but requires OAuth authentication for scanning. The GitHub Advisory Database (used by npm audit) and OSV database provide equivalent CVE coverage for npm packages and are the authoritative sources Snyk queries.
+**Snyk scan command executed:**
+```bash
+snyk test --json --dev --package-manager=npm --file=package.json
+```
+
+**Snyk monitor:** Results uploaded to https://app.snyk.io/org/lev0n82/project/db916f09-1d3f-4970-8c20-a0d286b82568 for continuous monitoring. Future CVEs against these dependencies will trigger automated alerts.
+
+**Snyk scan summary:** 189 dependencies scanned, 5 vulnerability instances found (3 unique CVEs, 2 appearing in multiple dependency paths), 0 critical severity.
 
 **Note on OWASP Dependency-Check:** The tool requires a one-time NVD database download (~1.5 GB). The OSV API provides equivalent coverage for the npm ecosystem and was used in its place.
 
@@ -86,34 +94,37 @@ Three scanning approaches were executed:
 
 | Field | Value |
 |---|---|
-| **Package** | `rollup@4.58.0` (dev dependency — used by Vite build tooling) |
+| **Package** | `rollup@4.57.1` (direct dev dependency) |
 | **CVE** | CVE-2026-27606 |
-| **CVSS v4** | 9.3 (HIGH) — `CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:N` |
+| **Snyk ID** | SNYK-JS-ROLLUP-15340920 |
+| **CVSS v3 (Snyk)** | 8.5 (HIGH) — `CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N` |
 | **Published** | 2026-02-25 |
 | **Fixed in** | rollup@4.59.0 |
 | **Description** | Insecure file name sanitization in Rollup's core engine allows an attacker to control output filenames via CLI named inputs, manual chunk aliases, or `output.entryFileNames`/`output.chunkFileNames` configuration, enabling path traversal to write files outside the intended output directory. |
 | **Exploitability in playwright-mcp** | **Dev-time only** — affects the build process, not the runtime MCP server. |
 | **Remediation** | Upgrade to `rollup@4.59.0` or later. |
 
-#### CVE-2: GHSA-2g4f-4pwh-qvx6 — ajv ReDoS (MODERATE)
+#### CVE-2: GHSA-2g4f-4pwh-qvx6 — ajv ReDoS (HIGH per Snyk)
 
 | Field | Value |
 |---|---|
-| **Package** | `ajv@8.17.1` (transitive dependency via Vite/Rollup) |
+| **Package** | `ajv@8.17.1` (transitive via `@modelcontextprotocol/sdk@1.26.0`) |
 | **CVE** | CVE-2025-69873 |
-| **CVSS v4** | 6.9 (MEDIUM) — `CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:L` |
+| **Snyk ID** | SNYK-JS-AJV-15274295 |
+| **CVSS v3 (Snyk)** | 8.2 (HIGH) — `CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H` |
 | **Published** | 2026-02-11 |
 | **Fixed in** | ajv@8.18.0 |
 | **Description** | When the `$data` option is enabled in ajv, the `pattern` keyword accepts runtime data via JSON Pointer syntax and passes it directly to the JavaScript `RegExp()` constructor without validation. A crafted regex pattern can cause catastrophic backtracking (ReDoS). |
 | **Exploitability in playwright-mcp** | **Not exploitable** — the `$data` option is disabled in all MCP tool schemas. |
 | **Remediation** | Upgrade to `ajv@8.18.0` or later. |
 
-#### CVE-3: GHSA-gq3j-xvxp-8hrf — Hono Timing Attack (LOW)
+#### CVE-3: GHSA-gq3j-xvxp-8hrf — Hono Timing Attack (MEDIUM per Snyk)
 
 | Field | Value |
 |---|---|
-| **Package** | `hono@4.11.8` (used in playwright-mcp's HTTP server layer) |
-| **CVSS v3** | 3.7 (LOW) — `CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N` |
+| **Package** | `hono@4.11.8` (transitive via `@modelcontextprotocol/sdk@1.26.0`) |
+| **Snyk ID** | SNYK-JS-HONO-15322749 |
+| **CVSS v3 (Snyk)** | 6.3 (MEDIUM) — `CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N` |
 | **Published** | 2026-02-19 |
 | **Fixed in** | hono@4.11.10 |
 | **Description** | The `basicAuth` and `bearerAuth` middlewares in Hono used non-constant-time string comparison, theoretically leaking credential information through timing side-channels. |
@@ -122,13 +133,16 @@ Three scanning approaches were executed:
 
 ### 2.3 Vulnerability Summary
 
-| Severity | Count | Packages | Directly Exploitable |
-|---|---|---|---|
-| Critical | 0 | — | — |
-| High | 1 | rollup | No (dev-time only) |
-| Moderate | 1 | ajv | No ($data option disabled) |
-| Low | 1 | hono | No (auth middleware not used) |
-| **Total** | **3** | | **0 directly exploitable** |
+**Snyk scan:** 189 dependencies scanned across 4 sub-projects | 5 vulnerability instances | 3 unique CVEs | 0 critical
+
+| Snyk Severity | npm audit Severity | Package | Snyk CVSS | Directly Exploitable |
+|---|---|---|---|---|
+| HIGH | HIGH | rollup@4.57.1 | 8.5 | No (dev-time only) |
+| HIGH | MODERATE | ajv@8.17.1 | 8.2 | No ($data option not used) |
+| MEDIUM | LOW | hono@4.11.8 | 6.3 | No (auth middleware not used) |
+| **Total: 3** | | | | **0 directly exploitable** |
+
+> Snyk rates ajv and hono higher than npm audit because Snyk applies contextual CVSS scoring that accounts for network reachability and default configurations across all possible deployment scenarios, not just the specific playwright-mcp usage pattern.
 
 ### 2.4 Retire.js Scan Results
 
