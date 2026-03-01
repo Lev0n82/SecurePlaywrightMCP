@@ -1,11 +1,6 @@
 # XZ Backdoor (CVE-2024-3094): Lessons Learned for SecurePlaywrightMCP
-
-**Author:** Manus AI  
 **Date:** February 26, 2026  
 **Purpose:** Extract security lessons from the xz backdoor incident to inform the design of SecurePlaywrightMCP gatekeeping strategy
-
----
-
 ## Executive Summary
 
 The **xz Utils backdoor** (CVE-2024-3094) represents one of the most sophisticated supply chain attacks in open source history. Discovered on March 28, 2024, this multi-year, likely state-sponsored operation successfully injected a backdoor into a widely-used compression library that could have compromised SSH servers across millions of Linux systems worldwide. The attack was only detected due to a performance anomaly noticed by a single developer, highlighting the fragility of the open source security ecosystem.
