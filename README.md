@@ -6,6 +6,7 @@
 [![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 [![Container](https://img.shields.io/badge/Runtime-Podman%20Rootless-red)](docs/PODMAN_SECURITY_ANALYSIS.md)
 [![Compliance](https://img.shields.io/badge/Compliance-NIST%20%7C%20ISO%2027001%20%7C%20SOC%202-orange)](docs/COMPLIANCE_MAPPING.md)
+[![SBOM](https://img.shields.io/badge/SBOM-CycloneDX%20v1.6-blue)](sbom/playwright-mcp-sbom.json)
 
 ---
 
@@ -180,6 +181,27 @@ Regardless of whether SecurePlaywrightMCP is adopted, the following actions shou
 **Continuous monitoring.** Automated vulnerability scanning runs on every pull request and on a nightly schedule using CodeQL (static analysis), Semgrep (security-focused pattern matching), and `npm audit` (dependency CVE checking). Dependabot is configured to raise pull requests for dependency updates, which are reviewed by the ITS Security Review Board before merging.
 
 **Incident response.** A documented incident response plan covers the detection, containment, eradication, and recovery procedures for a supply chain compromise of any dependency used by this repository. See [SECURITY.md](SECURITY.md) for vulnerability reporting procedures.
+
+---
+
+## Software Bill of Materials (SBOM)
+
+A complete Software Bill of Materials for `@playwright/mcp@0.0.68` has been generated using [CycloneDX](https://cyclonedx.org/) v1.6 specification and is published alongside this repository. The SBOM provides a full, machine-readable inventory of all 191 components in the dependency tree, enabling compliance teams, vulnerability management platforms, and incident responders to assess the complete software supply chain.
+
+| Format | File | Description |
+|---|---|---|
+| **JSON** | [`sbom/playwright-mcp-sbom.json`](sbom/playwright-mcp-sbom.json) | CycloneDX 1.6 JSON — primary format for tooling integration (Dependency-Track, Grype, etc.) |
+| **XML** | [`sbom/playwright-mcp-sbom.xml`](sbom/playwright-mcp-sbom.xml) | CycloneDX 1.6 XML — for compliance frameworks requiring XML format |
+
+The SBOM was generated with `cyclonedx-npm v4.1.2` and cross-referenced with the Snyk CLI v1.1303.0 scan. All three confirmed CVEs are annotated directly within the SBOM using the CycloneDX `vulnerabilities` schema, including CVSS scores, CWE identifiers, affected package PURLs, and remediation recommendations. This allows any CycloneDX-compatible vulnerability management tool (e.g., [OWASP Dependency-Track](https://dependencytrack.org/)) to ingest the SBOM and immediately surface the known vulnerabilities without a separate scan.
+
+**Generating a fresh SBOM** for a new version of `@playwright/mcp`:
+
+```bash
+npm install @cyclonedx/cyclonedx-npm -g
+cyclonedx-npm --output-format JSON --output-file sbom/playwright-mcp-sbom.json --flatten-components
+cyclonedx-npm --output-format XML  --output-file sbom/playwright-mcp-sbom.xml  --flatten-components
+```
 
 ---
 
