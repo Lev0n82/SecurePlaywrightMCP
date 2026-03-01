@@ -2,7 +2,7 @@
 
 **A hardened, enterprise-grade reimplementation of the Microsoft Playwright MCP server, built for organisations that require defence-in-depth security, supply chain integrity, and regulatory compliance.**
 
-[![Security Audit](https://img.shields.io/badge/Security%20Audit-Passed-green)](docs/playwright_mcp_security_findings.md)
+[![Security Audit](https://img.shields.io/badge/Security%20Audit-3%20CVEs%20Found-yellow)](docs/playwright_mcp_security_findings.md)
 [![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 [![Container](https://img.shields.io/badge/Runtime-Podman%20Rootless-red)](docs/PODMAN_SECURITY_ANALYSIS.md)
 [![Compliance](https://img.shields.io/badge/Compliance-NIST%20%7C%20ISO%2027001%20%7C%20SOC%202-orange)](docs/COMPLIANCE_MAPPING.md)
@@ -15,7 +15,7 @@ Playwright MCP ([`@playwright/mcp`](https://github.com/microsoft/playwright-mcp)
 
 However, a formal security audit conducted on February 26, 2026 identified that **Playwright MCP, as distributed, is not suitable for direct enterprise deployment without significant hardening**. The audit examined the full source code of the `playwright-mcp` repository, the embedded MCP implementation inside the Playwright core monorepo (`packages/playwright/src/mcp/`, 8,002 lines of TypeScript across 30 tool modules), all direct and transitive dependencies (244 packages total), and all browser install scripts.
 
-The audit found **zero known CVEs** and **no malicious code** — Playwright MCP is legitimate, well-maintained, open-source software from Microsoft. The concern is not malice; it is **attack surface**. The combination of a broad tool set, runtime npm downloads, CDN-distributed browser binaries, and powerful capabilities (arbitrary JavaScript execution, file system access, network interception, cookie and storage access) creates an unacceptable risk profile for environments handling sensitive data or operating under compliance frameworks such as NIST 800-53, ISO 27001, SOC 2, or PCI DSS.
+The audit found **no malicious code** — Playwright MCP is legitimate, well-maintained, open-source software from Microsoft. However, an authenticated Snyk CLI scan (March 1, 2026) identified **3 confirmed CVEs** in the dependency tree: CVE-2026-27606 in `rollup` (HIGH, CVSS 8.5), CVE-2025-69873 in `ajv` (HIGH, CVSS 8.2), and a timing-attack vulnerability in `hono` (MEDIUM, CVSS 6.3). None are directly exploitable in a default deployment, but all require patching. Beyond the CVEs, the broader concern is **attack surface**: the combination of a broad tool set, runtime npm downloads, CDN-distributed browser binaries, and powerful capabilities (arbitrary JavaScript execution, file system access, network interception, cookie and storage access) creates an unacceptable risk profile for environments handling sensitive data or operating under compliance frameworks such as NIST 800-53, ISO 27001, SOC 2, or PCI DSS.
 
 SecurePlaywrightMCP was created to address this gap by providing a minimal, auditable, containerised deployment of Playwright MCP with mandatory security controls applied at every layer of the stack.
 
@@ -43,7 +43,31 @@ The production dependency tree of `@playwright/mcp@0.0.68` resolves as follows:
 | Optional packages | 53 |
 | **Total** | **244** |
 
-`npm audit` returned **zero vulnerabilities** across all severity levels at the time of audit. Binary file scanning confirmed **no malicious binaries, no obfuscated JavaScript, no suspicious `preinstall`/`postinstall` scripts** in the MCP packages. One WASM file was found (`tests/assets/wasm/table2.wasm`) — a test asset only, not present in production builds.
+An authenticated **Snyk CLI v1.1303.0** scan (org: `lev0n82`, 189 dependencies scanned) and `npm audit` were both executed against the full dependency tree. **3 confirmed CVEs** were identified. Binary file scanning with `retire.js v5.4.2` found no additional issues. No malicious binaries, no obfuscated JavaScript, and no suspicious `preinstall`/`postinstall` scripts were found in the MCP packages. One WASM file was found (`tests/assets/wasm/table2.wasm`) — a test asset only, not present in production builds.
+
+### Confirmed CVE Findings (Snyk Authenticated Scan — March 1, 2026)
+
+| Snyk ID | CVE | Package | Severity (Snyk) | Severity (npm audit) | Dependency Path | Directly Exploitable |
+|---|---|---|---|---|---|---|
+| [SNYK-JS-ROLLUP-15340920](https://security.snyk.io/vuln/SNYK-JS-ROLLUP-15340920) | CVE-2026-27606 | `rollup@4.57.1` | **HIGH (CVSS 8.5)** | HIGH (9.3) | Direct dev dependency | ❌ Dev-time only |
+| [SNYK-JS-AJV-15274295](https://security.snyk.io/vuln/SNYK-JS-AJV-15274295) | CVE-2025-69873 | `ajv@8.17.1` | **HIGH (CVSS 8.2)** | MODERATE (6.9) | `@modelcontextprotocol/sdk@1.26.0` → `ajv` | ❌ `$data` option not used |
+| [SNYK-JS-HONO-15322749](https://security.snyk.io/vuln/SNYK-JS-HONO-15322749) | — | `hono@4.11.8` | **MEDIUM (CVSS 6.3)** | LOW (3.7) | `@modelcontextprotocol/sdk@1.26.0` → `hono` | ❌ Auth middleware not used |
+
+**CVE-2026-27606 (rollup — Directory Traversal):** Insecure filename sanitisation in Rollup's core engine allows path traversal to write files outside the intended output directory via crafted CLI inputs or configuration values. This affects the build toolchain only — it is not present in the runtime MCP server. Fix: upgrade to `rollup@4.59.0`.
+
+**CVE-2025-69873 (ajv — ReDoS):** When the `$data` option is enabled in ajv, the `pattern` keyword accepts runtime data via JSON Pointer syntax and passes it directly to `RegExp()` without validation, enabling catastrophic backtracking. Playwright MCP does not enable the `$data` option in any MCP tool schema. Fix: upgrade to `ajv@8.18.0`.
+
+**SNYK-JS-HONO-15322749 (hono — Timing Attack):** The `basicAuth` and `bearerAuth` middlewares in Hono used non-constant-time string comparison, leaking credential information through timing side-channels. Playwright MCP uses Hono for HTTP routing only and does not use its auth middleware. Fix: upgrade to `hono@4.11.10`.
+
+> **None of the three CVEs are directly exploitable in a default Playwright MCP deployment.** However, they represent real vulnerabilities in the dependency tree that should be patched. Snyk continuous monitoring has been configured at https://app.snyk.io/org/lev0n82/project/db916f09-1d3f-4970-8c20-a0d286b82568 to alert on newly disclosed issues.
+
+**Remediation commands:**
+```bash
+# Fix all three CVEs
+npm update rollup ajv hono
+# Or pin specific versions:
+npm install rollup@4.59.0 ajv@8.18.0 hono@4.11.10
+```
 
 ### Critical Structural Finding
 
@@ -60,7 +84,7 @@ The most significant architectural discovery is that **Playwright MCP is not a s
 | 🟡 Medium | 244 total packages — extensive transitive dependency surface for supply chain attacks |
 | 🟡 Medium | Six browser install scripts download ~300 MB of browser binaries from Microsoft CDN without cryptographic signature verification |
 | 🟡 Medium | Many security-relevant configuration flags — misconfiguration creates exploitable holes |
-| 🟢 Low | Zero known CVEs at time of audit |
+| 🟡 Medium | 3 confirmed CVEs in dependency tree (rollup HIGH, ajv HIGH, hono MEDIUM) — none directly exploitable in default config |
 | 🟢 Low | No malicious binaries, no obfuscated code, transparent TypeScript implementation |
 | 🟢 Low | Built-in origin whitelisting, isolated browser profiles, and configurable permissions available |
 
@@ -156,6 +180,88 @@ Regardless of whether SecurePlaywrightMCP is adopted, the following actions shou
 **Continuous monitoring.** Automated vulnerability scanning runs on every pull request and on a nightly schedule using CodeQL (static analysis), Semgrep (security-focused pattern matching), and `npm audit` (dependency CVE checking). Dependabot is configured to raise pull requests for dependency updates, which are reviewed by the ITS Security Review Board before merging.
 
 **Incident response.** A documented incident response plan covers the detection, containment, eradication, and recovery procedures for a supply chain compromise of any dependency used by this repository. See [SECURITY.md](SECURITY.md) for vulnerability reporting procedures.
+
+---
+
+## Remediation Plan
+
+This section documents the formal remediation plan for all findings identified during the security audit. Remediation is tracked against three time horizons: **immediate** (within 1 sprint), **medium-term** (within the current quarter), and **long-term** (ongoing governance).
+
+### Immediate Remediation — CVE Patches
+
+All three CVEs identified by the Snyk scan have known fixes available and should be patched before any production deployment.
+
+| CVE | Package | Current Version | Fixed Version | Action |
+|---|---|---|---|---|
+| CVE-2026-27606 | `rollup` | 4.57.1 | 4.59.0+ | `npm install rollup@4.59.0` |
+| CVE-2025-69873 | `ajv` | 8.17.1 | 8.18.0+ | `npm install ajv@8.18.0` |
+| SNYK-JS-HONO-15322749 | `hono` | 4.11.8 | 4.11.10+ | `npm install hono@4.11.10` |
+
+```bash
+# Apply all three patches in one command
+npm install rollup@4.59.0 ajv@8.18.0 hono@4.11.10
+
+# Verify no remaining vulnerabilities
+npm audit
+snyk test
+```
+
+Note that `rollup` is a dev-time build dependency and `ajv`/`hono` are transitive dependencies of `@modelcontextprotocol/sdk`. If `@modelcontextprotocol/sdk` does not yet ship with patched versions of these packages, use `npm overrides` (or `pnpm.overrides` / `yarn resolutions`) to force the patched versions:
+
+```json
+// package.json
+"overrides": {
+  "ajv": ">=8.18.0",
+  "hono": ">=4.11.10",
+  "rollup": ">=4.59.0"
+}
+```
+
+### Immediate Remediation — MCP Protocol Hardening
+
+The six critical findings from the MCP protocol analysis each require a configuration or deployment change:
+
+| Finding | Remediation | Owner |
+|---|---|---|
+| No authentication on HTTP transport | Enable `--auth-token` flag; enforce bearer token validation on all requests | Deployment team |
+| Undocumented `/killkillkill` endpoint | Block the endpoint at the reverse proxy layer; restrict MCP port to localhost only | Infrastructure |
+| `browser_run_code` uses Node.js `vm` (not a sandbox) | Disable `browser_run_code` tool unless explicitly required; run in Podman rootless container | Deployment team |
+| File upload accepts absolute paths | Restrict file tool to a designated working directory using `--working-dir`; validate paths server-side | Application team |
+| HttpOnly cookie exfiltration via CDP | Disable `browser_cookies` tool unless required; audit all cookie access in audit logs | Security team |
+| Network interception with header injection | Disable `browser_network_*` tools unless required; restrict to whitelisted domains | Deployment team |
+
+### Medium-Term Remediation — Supply Chain Controls
+
+Within the current quarter, the following supply chain controls should be established for any team consuming Playwright MCP:
+
+A **private npm registry** (Artifactory, Nexus, or Verdaccio) should be provisioned to mirror `@playwright/mcp` and all its dependencies. The registry should be configured to disable public npm fallback for scoped packages, and all packages should be scanned with `npm audit` and Snyk before being admitted to the mirror. The update cadence should be controlled — no automatic version pulls.
+
+**Version pinning** must be enforced across all environments. The `package-lock.json` or `pnpm-lock.yaml` file must be committed to source control and verified in CI. Floating version specifiers (`@latest`, `^`, `~`) must be prohibited in `package.json` for all security-sensitive packages. A pre-commit hook should reject any `package.json` changes that introduce floating specifiers.
+
+**Browser binary verification** should be implemented by setting `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` in all environments and distributing browser binaries through a controlled internal channel with SHA-256 checksum verification.
+
+### Medium-Term Remediation — Container Hardening
+
+All Playwright MCP deployments should be migrated to the SecurePlaywrightMCP Podman rootless container configuration documented in this repository. The migration provides:
+
+- Elimination of the root daemon attack surface (Podman daemonless architecture)
+- User namespace mapping that limits container escape impact (container UID 0 → host UID 100000+)
+- Custom seccomp profile blocking 50+ dangerous syscalls
+- SELinux mandatory access control with automatic container labelling
+- Read-only root filesystem preventing binary modification by malware
+- Network egress blocked by default with explicit domain whitelisting
+
+### Long-Term Governance
+
+Sustained security posture requires ongoing governance processes rather than one-time fixes. The following processes should be established:
+
+**Continuous vulnerability monitoring** is configured via Snyk at https://app.snyk.io/org/lev0n82/project/db916f09-1d3f-4970-8c20-a0d286b82568. Snyk will send automated alerts when new CVEs are disclosed against any of the 189 scanned dependencies. All alerts should be triaged within 48 hours and patched within the SLA defined by severity (Critical: 24h, High: 7 days, Medium: 30 days, Low: 90 days).
+
+**SBOM generation** on every build using CycloneDX provides a complete, auditable inventory of all components. The SBOM should be stored alongside each release artifact and submitted to the organisation's vulnerability management platform for continuous monitoring.
+
+**Security review board approval** is required for all dependency updates. The ITS Security Review Board reviews the Snyk diff, the changelog, and the npm audit output before any dependency version change is merged to the main branch.
+
+**Annual penetration testing** of the full SecurePlaywrightMCP deployment should be conducted by an independent security team, covering the four documented attack chains and any newly discovered vulnerability classes.
 
 ---
 
