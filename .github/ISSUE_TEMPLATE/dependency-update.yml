@@ -1,0 +1,125 @@
+name: Dependency Update Request
+description: Request an update to a pinned dependency in SecurePlaywrightMCP
+title: "[DEP] Update <package> from <old-version> to <new-version>"
+labels: ["dependencies", "needs-security-review"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Dependency Update Request
+        All dependency updates in SecurePlaywrightMCP require security review before merging.
+        This form captures the information needed for the ITS Security Review Board to evaluate the change.
+
+  - type: input
+    id: package-name
+    attributes:
+      label: Package Name
+      placeholder: "e.g. @playwright/mcp"
+    validations:
+      required: true
+
+  - type: input
+    id: current-version
+    attributes:
+      label: Current Pinned Version
+      placeholder: "e.g. 0.0.28"
+    validations:
+      required: true
+
+  - type: input
+    id: proposed-version
+    attributes:
+      label: Proposed Version
+      placeholder: "e.g. 0.0.29"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: update-reason
+    attributes:
+      label: Reason for Update
+      options:
+        - Security vulnerability fix (CVE)
+        - Bug fix required for functionality
+        - Performance improvement
+        - New feature required
+        - Routine maintenance
+    validations:
+      required: true
+
+  - type: input
+    id: cve-id
+    attributes:
+      label: CVE ID (if security fix)
+      placeholder: "e.g. CVE-2024-XXXXX"
+    validations:
+      required: false
+
+  - type: textarea
+    id: changelog-summary
+    attributes:
+      label: Changelog Summary
+      description: Paste the relevant section of the upstream CHANGELOG.md for the new version.
+    validations:
+      required: true
+
+  - type: textarea
+    id: new-dependencies
+    attributes:
+      label: New Transitive Dependencies
+      description: |
+        Run `npm install <package>@<version> --dry-run` and list any new transitive dependencies
+        that would be added. Write "None" if no new dependencies are introduced.
+      placeholder: |
+        - new-package@1.2.3 (MIT) — added by upstream change X
+        - another-package@4.5.6 (Apache-2.0) — added by upstream change Y
+    validations:
+      required: true
+
+  - type: textarea
+    id: removed-dependencies
+    attributes:
+      label: Removed Transitive Dependencies
+      description: List any transitive dependencies that would be removed.
+      placeholder: "None"
+    validations:
+      required: true
+
+  - type: textarea
+    id: breaking-changes
+    attributes:
+      label: Breaking Changes
+      description: List any breaking API changes that require code modifications.
+      placeholder: "None"
+    validations:
+      required: true
+
+  - type: textarea
+    id: security-assessment
+    attributes:
+      label: Preliminary Security Assessment
+      description: |
+        Summarise the results of your initial security review:
+        - npm audit output for the new version
+        - Any known issues with the new version
+        - Assessment of new transitive dependencies
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Requester Checklist
+      options:
+        - label: I have reviewed the upstream changelog for the proposed version
+          required: true
+        - label: I have run `npm audit` against the proposed version
+          required: true
+        - label: I have listed all new transitive dependencies
+          required: true
+        - label: I have checked for any binary files added in the new version
+          required: true
+        - label: I have verified the new version's git tag matches the published npm package hash
+          required: false
